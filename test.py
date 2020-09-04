@@ -2,7 +2,7 @@
 """
 Created on Fri Sep  4 09:47:25 2020
 
-@author: ceth
+@author: yomama
 """
 
 a=4
