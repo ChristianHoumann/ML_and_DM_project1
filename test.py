@@ -2,7 +2,7 @@
 """
 Created on Fri Sep  4 09:47:25 2020
 
-@author: yomama
+@author: Thor Eric Dueholm (s194589) and Christian Emil Tchernokojev Houmann (s194602)
 """
 
 import numpy as np
@@ -66,7 +66,7 @@ for i in range(M):
     xlabel(attributeNames[i])
     ylim(0, N) # Make the y-axes equal for improved readability
     if i%v!=0: yticks([])
-    if i==0: title('Wine: Histogram')
+    if i==0: title('Histogram of attributes')
 
 
 # We plot scatterplots of all the attributes:
@@ -119,6 +119,9 @@ def computeMedianStdRange(index, Xall, BasicXall):
     BasicXall[2,index+1] = np.median(Xall[:,index])
     BasicXall[3,index+1] = Xall[:,index].max()-Xall[:,index].min()
     BasicXall[4,index+1] = Xall[:,index].std(ddof=1)
+    
+    # Uncomment this to see min and max values:
+    # print('Min: {1}  ,  Max: {0}', Xall[:,index].max(), Xall[:,index].min() )
 
 
 
@@ -128,7 +131,6 @@ BasicXall[0,1:] = attributeNames
 BasicXall[1,1:] = Xall.mean(axis=0)
 for x in range(M+1):
     computeMedianStdRange(x,Xall,BasicXall)
-
 
 
 
@@ -208,41 +210,9 @@ plt.xlabel('Attributes')
 plt.ylabel('Component coefficients')
 plt.legend(legendStrs)
 plt.grid()
-plt.title('NanoNose: PCA Component Coefficients')
+plt.title('PCA components coefficients (normalized)')
 plt.show()
 
-
-# Plot attribute coefficients in principal component space
-for att in range(V.shape[1]):
-    plt.arrow(0,0, V[att,i], V[att,j])
-    plt.text(V[att,i], V[att,j], attributeNamesShort[att])
-plt.xlim([-1,1])
-plt.ylim([-1,1])
-plt.xlabel('PC'+str(i+1))
-plt.ylabel('PC'+str(j+1))
-plt.grid()
-# Add a unit circle
-plt.plot(np.cos(np.arange(0, 2*np.pi, 0.01)), 
-    np.sin(np.arange(0, 2*np.pi, 0.01)));
-plt.axis('equal')
-plt.show()
-
-i = 2
-j = 3
-
-for att in range(V.shape[1]):
-    plt.arrow(0,0, V[att,i], V[att,j])
-    plt.text(V[att,i], V[att,j], attributeNamesShort[att])
-plt.xlim([-1,1])
-plt.ylim([-1,1])
-plt.xlabel('PC'+str(i+1))
-plt.ylabel('PC'+str(j+1))
-plt.grid()
-# Add a unit circle
-plt.plot(np.cos(np.arange(0, 2*np.pi, 0.01)), 
-    np.sin(np.arange(0, 2*np.pi, 0.01)));
-plt.axis('equal')
-plt.show()
 
 
 
