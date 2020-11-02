@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Fri Sep  4 09:47:25 2020
+Created on Fri Sep 4 09:47:25 2020
 
 @author: Thor Eric Dueholm (s194589) and Christian Emil Tchernokojev Houmann (s194602)
 """
@@ -13,7 +13,7 @@ from matplotlib.pyplot import (figure, plot, title, xlabel, ylabel, show,
                                legend, subplot, xticks, yticks, boxplot, hist,
                                ylim)
 
-
+# read the data into python
 df = pd.read_csv("http://www-stat.stanford.edu/~tibs/ElemStatLearn/datasets/SAheart.data",
 	encoding='utf-8')
 
@@ -39,10 +39,7 @@ attributeNamesShort = [None] * 10
 for i in range(len(attributeNames)):
     attributeNamesShort[i] = (attributeNames[i])[:3]
     
-
-
 N, M = X.shape
-
 
 # make array of all atributes
 Xall = np.zeros((N,M+1))
@@ -51,13 +48,13 @@ Xall[:,M] = y
 
 
 
+# boxplots:
 figure()
 title('Boxplot of attributes')
 boxplot(Xall)
 xticks(range(1,M+2), attributeNames, rotation=45)
 
-
-## boxplots to see if normally distributed:
+# histogram
 figure(figsize=(14,9))
 u = np.floor(np.sqrt(M)); v = np.ceil(float(M)/u)
 for i in range(M):
@@ -69,7 +66,8 @@ for i in range(M):
     if i==0: title('Histogram of attributes')
 
 
-# We plot scatterplots of all the attributes:
+# We plot scatterplots of all the attributes
+# except Famhist (4) and CHD as these are binary
 Attributes = [1,2,3,5,6,7,8]
 NumAtr = len(Attributes)
 
@@ -93,45 +91,50 @@ for m1 in range(NumAtr):
 legend(["Negative","Positive"])
 show()
 
-# We futher look at the following attributes
+#Compute correlation matrix
+dfXr = pd.DataFrame(Xr.astype(float),columns=attributeNamesShort[:-1])
+corrMatrixXr = dfXr.corr()
 
+# We futher look at the following attributes
 i = 3
 j = 6
 figure()
 plt.title('correlation between adiposity and BMI')
-for hej in range(2):
-    class_mask = y==hej
+for c in range(2):
+    class_mask = y==c
     plot(Xr[class_mask,i], Xr[class_mask,j], 'o')
 legend(["Negative","Positive"])
 plt.xlabel(attributeNames[i]);
 plt.ylabel(attributeNames[j]);
 show()
 
-#Correlation of Obesity and adiposity:
-np.corrcoef(np.array(Xr[:,i],dtype=float), np.array(Xr[:,j],dtype=float))
-
-
 ##TODO plot for some ages too:
-    
+fig = plt.figure()
+fig.subplots_adjust(hspace=0.4, wspace=0.5)
+i2 = 8
+Attributes = [1,2,3,5,6,7]
+for i in Attributes:
+    ax = fig.add_subplot(2, 3, Attributes.index(i)+1)
+    for c in range(2):
+        class_mask = y==c
+        plot(Xr[class_mask,i2], Xr[class_mask,i], '.')
+    plt.xlabel(attributeNames[i2]);
+    plt.ylabel(attributeNames[i]);
+show()
+
 
 ### Basic summary statistics
-def computeMedianStdRange(index, Xall, BasicXall):
+BasicXall = np.empty((5,M+2),dtype=object)
+BasicXall[:,0] = ["","Mean","Median","Range","sd"]
+BasicXall[0,1:] = attributeNames
+BasicXall[1,1:] = Xall.mean(axis=0)
+for index in range(M+1):
     BasicXall[2,index+1] = np.median(Xall[:,index])
     BasicXall[3,index+1] = Xall[:,index].max()-Xall[:,index].min()
     BasicXall[4,index+1] = Xall[:,index].std(ddof=1)
     
     # Uncomment this to see min and max values:
     # print('Min: {1}  ,  Max: {0}', Xall[:,index].max(), Xall[:,index].min() )
-
-
-
-BasicXall = np.empty((5,M+2),dtype=object)
-BasicXall[:,0] = ["","Mean","Median","Range","sd"]
-BasicXall[0,1:] = attributeNames
-BasicXall[1,1:] = Xall.mean(axis=0)
-for x in range(M+1):
-    computeMedianStdRange(x,Xall,BasicXall)
-
 
 
 
@@ -146,9 +149,10 @@ Yall = Yall*(1/np.std(Yall,0))
 
 
 figure()
-title('Boxplot of normalized attributes')
+title('Boxplot of standardized attributes')
 boxplot(Yall)
 xticks(range(1,M+2), attributeNames, rotation=45)
+
 
 ### PCA analysis
 
@@ -160,15 +164,11 @@ rho = (S*S) / (S*S).sum()
 
 threshold = 0.9
 
-# how much variance does the first three components explain
-(rho[0:3]).sum()
-
-## TODO: SER RIGTIG ØV UD NÅR VI DIVIDERE MED SD
 plt.figure()
 plt.plot(range(1,len(rho)+1),rho,'x-')
 plt.plot(range(1,len(rho)+1),np.cumsum(rho),'o-')
 plt.plot([1,len(rho)],[threshold, threshold],'k--')
-plt.title('Variance explained by principal components');
+plt.title('Variance explained by principal components (standardized)');
 plt.xlabel('Principal component');
 plt.ylabel('Variance explained');
 plt.legend(['Individual','Cumulative','Threshold'])
@@ -181,23 +181,22 @@ V = Vh.T
 
 Z = Y @ V
 
-# Indices of the principal components to be plotted
+# Plot the data projected on the first two principal components
 i = 0
 j = 1
 
 f = figure()
 title('Heart disease data: PCA')
-#Z = array(Z)
 for c in range(2):
-    # select indices belonging to class c:
     class_mask = y==c
     plot(Z[class_mask,i], Z[class_mask,j], 'o', alpha=.5)
 legend(["Negative","Positive"])
 xlabel('PC{0}'.format(i+1))
 ylabel('PC{0}'.format(j+1))
-# Output result to screen
 show()
 
+
+# Plot the first three principal components coefficients
 pcs = [0,1,2]
 legendStrs = ['PC'+str(e+1) for e in pcs]
 c = ['r','g','b']
@@ -210,7 +209,7 @@ plt.xlabel('Attributes')
 plt.ylabel('Component coefficients')
 plt.legend(legendStrs)
 plt.grid()
-plt.title('PCA components coefficients (normalized)')
+plt.title('PCA components coefficients (standardized)')
 plt.show()
 
 
