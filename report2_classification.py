@@ -7,6 +7,13 @@ from sklearn.linear_model import LogisticRegression
 from toolbox_02450 import rocplot, confmatplot
 from sklearn import model_selection
 from toolbox_02450 import rlr_validate
+from sklearn import tree
+from sklearn.model_selection import GridSearchCV
+from platform import system
+from os import getcwd
+from toolbox_02450 import windows_graphviz_call
+from matplotlib.image import imread
+from sklearn import metrics
 
 
 # read the data into python
@@ -166,6 +173,67 @@ plt.xlabel('Regularization strength, $\log_{10}(\lambda)$')
 plt.title('Parameter vector L2 norm')
 plt.grid()
 plt.show()
+
+### We want to make base line and find it's error rate
+# lets count amount with and without CHD
+CHD_occurences = np.empty(2)
+CHD_occurences[0] = np.count_nonzero(y == 0)
+CHD_occurences[1] = np.count_nonzero(y == 1)
+# There are most without CHD hence the model will always predict that it is 0
+# The error rate is
+baseline_error_rate = (CHD_occurences[0]/N)*100
+
+
+### Decision tree
+parameters = {'max_depth':range(3,20)}
+clf = GridSearchCV(tree.DecisionTreeClassifier(), parameters, n_jobs=4)
+clf.fit(X=Xr, y=y)
+tree_model = clf.best_estimator_
+print (clf.best_score_, clf.best_params_)
+
+criterion='gini'
+dtc = tree.DecisionTreeClassifier(criterion=criterion, min_samples_split=10)
+
+c=0
+for train_index, test_index in CV.split(X,y):
+    # extract training and test set for current CV fold
+    X_train = Xr[train_index]
+    y_train = y[train_index]
+    X_test = Xr[test_index]
+    y_test = y[test_index]
+    internal_cross_validation = 10
+    
+    #How do we make the innner
+    
+    
+    
+    dtc = dtc.fit(X_train,y_train)
+
+    y_pred = np.sum(y_test_est != y_test) / len(y_test)
+    print("Errorrate:",y_pred*100)
+    
+    
+
+
+
+fname='tree_' + criterion + '_CHD_data'
+# Export tree graph .gvz file to parse to graphviz
+out = tree.export_graphviz(dtc, out_file=fname + '.gvz', feature_names=attributeNames[1:10])
+
+if system() == 'Windows':
+    # N.B.: you have to update the path_to_graphviz to reflect the position you 
+    # unzipped the software in!
+    path_to_graphviz = r'C:\Users\thore\.spyder-py3\Graphviz' # CHANGE THIS
+    windows_graphviz_call(fname=fname,
+                          cur_dir=getcwd(),
+                          path_to_graphviz=path_to_graphviz)
+    plt.figure(figsize=(12,12))
+    plt.imshow(imread(fname + '.png'))
+    plt.box('off'); plt.axis('off')
+    plt.show()
+
+
+
 
 
 
