@@ -197,7 +197,7 @@ Yreg = Yreg.reshape(462,1)
 
 
 # Parameters for neural network classifier
-n_hidden_units = 5      # number of hidden units
+n_hidden_units = 10      # number of hidden units
 n_replicates = 1        # number of networks trained in each k-fold
 max_iter = 40000
 
