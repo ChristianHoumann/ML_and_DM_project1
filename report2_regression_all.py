@@ -100,6 +100,7 @@ w_rlr = np.empty((M,K))
 mu = np.empty((K, M-1))
 sigma = np.empty((K, M-1))
 w_noreg = np.empty((M,K))
+all_lamdas = np.empty((K))
 
 
 k=0
@@ -113,7 +114,9 @@ for train_index_lr, test_index_lr in CV.split(Xreg,Ysbp):
     internal_cross_validation = 5    
     
     opt_val_err, opt_lambda, mean_w_vs_lambda, train_err_vs_lambda, test_err_vs_lambda = rlr_validate(X_train_lr, y_train_lr, lambdas, internal_cross_validation)
-
+    
+    all_lamdas[k] = opt_lambda
+    
     # Standardize outer fold based on training set, and save the mean and standard
     # deviations since they're part of the model (they would be needed for
     # making new predictions) - for brevity we won't always store these in the scripts
@@ -229,6 +232,7 @@ for (k, (train_index, test_index)) in enumerate(CV.split(Xdt,Ysbp)):
     Internalmodel = []
     
     ##### internal cross validation #########
+    
     count = 0
     for h in n_hidden_units_all: 
         model = lambda: torch.nn.Sequential(
