@@ -190,9 +190,9 @@ print('- R^2 test:     {0}\n'.format((Error_test_nofeatures.sum()-Error_test_rlr
 
 
 ### ANN
+Ysbp = Ysbp.reshape(462,1)
 
-
-n_hidden_units_all = [3,3,4,5,6]
+n_hidden_units_all = [1,3,4,5,6]
 n_replicates = 1           # number of networks trained in each k-fold
 max_iter = 40000
 
