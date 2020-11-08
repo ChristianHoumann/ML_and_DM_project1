@@ -212,7 +212,7 @@ Ysbp = Ysbp.reshape(462,1)
 
 n_hidden_units_all = [1,3,4,5,6]
 n_replicates = 1           # number of networks trained in each k-fold
-max_iter = 40000
+max_iter = 500
 
 
 # K-fold crossvalidation
@@ -243,58 +243,78 @@ for (k, (train_index, test_index)) in enumerate(CV.split(Xdt,Ysbp)):
     y_test = torch.Tensor(Ysbp[test_index])
     
     
-    Internalerrors = np.empty((K_internal))
+    Internalerrors = np.empty((K,K_internal))
     Internalmodel = []
     
+    Egen = np.empty((K_internal))
+    
     ##### internal cross validation #########
+    for (k2, (train_index_internal, test_index_internal)) in enumerate(CV.split(X_train,y_train)):
+        
+        X_train_internal = torch.Tensor(Xdt[train_index_internal,:])
+        y_train_internal = torch.Tensor(Ysbp[train_index_internal])
+        X_test_internal = torch.Tensor(Xdt[test_index_internal,:])
+        y_test_internal = torch.Tensor(Ysbp[test_index_internal])
+        
+        count = 0
+        for h in n_hidden_units_all: 
+            model = lambda: torch.nn.Sequential(
+                        torch.nn.Linear(M-1, h), #M features to n_hidden_units
+                        torch.nn.Tanh(),   # 1st transfer function,
+                        torch.nn.Linear(h, 1), # n_hidden_units to 1 output neuron
+                        # no final tranfer function, i.e. "linear output"
+                        )
+            print('Training model of type:\n\n{}\n'.format(str(model())))
+        
+        
+            # Train the net on training data
+            net, final_loss, learning_curve = train_neural_net(model,
+                                                       loss_fn,
+                                                       X=X_train_internal,
+                                                       y=y_train_internal,
+                                                       n_replicates=n_replicates,
+                                                       max_iter=max_iter)
+    
+            print('\n\tBest loss: {}\n'.format(final_loss))
+        
+            # Determine estimated class labels for test set
+            y_test_est_internal = net(X_test_internal)
+        
+            # Determine errors and errors
+            se = (y_test_est_internal.float()-y_test_internal.float())**2 # squared error
+            mse = (sum(se).type(torch.float)/len(y_test_internal)).data.numpy() #mean
+        
+            Internalerrors[count][k2] = (mse)
+            Internalmodel.append(model)
+        
+            count += 1
     
     count = 0
-    for h in n_hidden_units_all: 
-        model = lambda: torch.nn.Sequential(
-                    torch.nn.Linear(M-1, h), #M features to n_hidden_units
-                    torch.nn.Tanh(),   # 1st transfer function,
-                    torch.nn.Linear(h, 1), # n_hidden_units to 1 output neuron
-                    # no final tranfer function, i.e. "linear output"
-                    )
-        print('Training model of type:\n\n{}\n'.format(str(model())))
+    for errorsmdl in Internalerrors:
+        Egen[count] = (sum(errorsmdl))*(len(test_index_internal)/len(train_index))
+        count += 1
         
-        
-        # Train the net on training data
-        net, final_loss, learning_curve = train_neural_net(model,
+    minIndex = np.argmin(Egen)
+    allmodels.append(Internalmodel[minIndex])
+    
+    net, final_loss, learning_curve = train_neural_net(allmodels[k],
                                                        loss_fn,
                                                        X=X_train,
                                                        y=y_train,
                                                        n_replicates=n_replicates,
                                                        max_iter=max_iter)
     
-        print('\n\tBest loss: {}\n'.format(final_loss))
-        
-        # Determine estimated class labels for test set
-        y_test_est = net(X_test)
-        
-        for param in (net.parameters()):
-            print((list(param.size())))
-
-        
-        y_test_est.float()
-        
-        # Determine errors and errors
-        se = (y_test_est.float()-y_test.float())**2 # squared error
-        mse = (sum(se).type(torch.float)/len(y_test)).data.numpy() #mean
-        
-        Internalerrors[count] = (mse)
-        Internalmodel.append(net)
-        
-        count += 1
-        
-        
-    minIndex = np.argmin(Internalerrors)
-    errors.append(Internalerrors[minIndex]) # store error rate for current CV fold 
-    allmodels.append(Internalmodel[minIndex])
     
+    y_test_est = net(X_test)
+    
+    # Determine errors and errors
+    se = (y_test_est.float()-y_test.float())**2 # squared error
+    mse = (sum(se).type(torch.float)/len(y_test)).data.numpy() #mean
+    
+    errors.append((mse)) # store error rate for current CV fold     
     paramforCurrent = []       
     
-    for param in (Internalmodel[minIndex]).parameters():
+    for param in (net).parameters():
         paramforCurrent.append(list(param.size()))
 
 
