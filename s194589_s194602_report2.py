@@ -44,6 +44,8 @@ for i in range(len(attributeNames)):
     
 N, M = X.shape
 
+
+
 # make array of all atributes
 Xall = np.zeros((N,M+1))
 Xall[:,0:M] = Xr
@@ -63,7 +65,16 @@ Yall = Yall*(1/np.std(Yall,0))
 ############ Regression ##################
 ###### Part A
 Yreg = Xall[:,0] #Sbp
-Xreg = Yall[:,1:10]
+Xreg = Xall[:,1:10]
+Xdt = Xall[:,1:10]
+
+
+# Add offset attribute
+Xreg = np.concatenate((np.ones((Xreg.shape[0],1)),Xreg),1)
+attributeNamesNoOff = attributeNames
+attributeNames = [u'Offset']+attributeNames
+M = M+1
+
 
 ## Crossvalidation
 # Create crossvalidation partition for evaluation
@@ -72,7 +83,7 @@ CV = model_selection.KFold(K, shuffle=True)
 #CV = model_selection.KFold(K, shuffle=False)
 
 # Values of lambda
-lambdas = np.power(10.,range(-5,9))
+lambdas = np.logspace(-2, 8, 10)
 
 # Initialize variables
 #T = len(lambdas)
@@ -103,11 +114,11 @@ for train_index, test_index in CV.split(Xreg,Yreg):
     # Standardize outer fold based on training set, and save the mean and standard
     # deviations since they're part of the model (they would be needed for
     # making new predictions) - for brevity we won't always store these in the scripts
-    # mu[k, :] = np.mean(X_train[:, 1:], 0)
-    # sigma[k, :] = np.std(X_train[:, 1:], 0)
+    mu[k, :] = np.mean(X_train[:, 1:], 0)
+    sigma[k, :] = np.std(X_train[:, 1:], 0)
     
-    # X_train[:, 1:] = (X_train[:, 1:] - mu[k, :] ) / sigma[k, :] 
-    # X_test[:, 1:] = (X_test[:, 1:] - mu[k, :] ) / sigma[k, :] 
+    X_train[:, 1:] = (X_train[:, 1:] - mu[k, :] ) / sigma[k, :] 
+    X_test[:, 1:] = (X_test[:, 1:] - mu[k, :] ) / sigma[k, :] 
     
     Xty = X_train.T @ y_train
     XtX = X_train.T @ X_train
@@ -180,10 +191,15 @@ print('- R^2 test:     {0}\n'.format((Error_test_nofeatures.sum()-Error_test_rlr
 
 ###### Part B
 ### ANN
+
+Xdt = stats.zscore(Xdt)
+Yreg = Yreg.reshape(462,1)
+
+
 # Parameters for neural network classifier
-n_hidden_units = 5      # number of hidden units
+n_hidden_units = 10      # number of hidden units
 n_replicates = 1        # number of networks trained in each k-fold
-max_iter = 10000
+max_iter = 40000
 
 # K-fold crossvalidation
 K = 3                   # only three folds to speed up this example
@@ -204,27 +220,28 @@ loss_fn = torch.nn.MSELoss() # notice how this is now a mean-squared-error loss
 
 print('Training model of type:\n\n{}\n'.format(str(model())))
 errors = [] # make a list for storing generalizaition error in each loop
-for (k, (train_index, test_index)) in enumerate(CV.split(Xreg,Yreg)): 
+k = 0
+for (k, (train_index_dt, test_index_dt)) in enumerate(CV.split(Xdt,Yreg)): 
     print('\nCrossvalidation fold: {0}/{1}'.format(k+1,K))    
     
     # Extract training and test set for current CV fold, convert to tensors
-    X_train = torch.Tensor(Xreg[train_index,:])
-    y_train = torch.Tensor(Yreg[train_index])
-    X_test = torch.Tensor(Xreg[test_index,:])
-    y_test = torch.Tensor(Yreg[test_index])
+    X_train_dt = torch.Tensor(Xdt[train_index_dt,:])
+    y_train_dt = torch.Tensor(Yreg[train_index_dt])
+    X_test_dt = torch.Tensor(Xdt[test_index_dt,:])
+    y_test_dt = torch.Tensor(Yreg[test_index_dt])
     
     # Train the net on training data
     net, final_loss, learning_curve = train_neural_net(model,
                                                        loss_fn,
-                                                       X=X_train,
-                                                       y=y_train,
+                                                       X=X_train_dt,
+                                                       y=y_train_dt,
                                                        n_replicates=n_replicates,
                                                        max_iter=max_iter)
     
     print('\n\tBest loss: {}\n'.format(final_loss))
     
     # Determine estimated class labels for test set
-    y_test_est = net(X_test)
+    y_test_est = net(X_test_dt)
     
     # Determine errors and errors
     se = (y_test_est.float()-y_test.float())**2 # squared error
@@ -251,9 +268,9 @@ weights = [net[i].weight.data.numpy().T for i in [0,2]]
 biases = [net[i].bias.data.numpy() for i in [0,2]]
 tf =  [str(net[i]) for i in [1,2]]
 
-attributeNames2 = [name[:] for name in attributeNames[1:10]]
+attributeNamesNoOff2 = [name[:] for name in attributeNamesNoOff[1:10]]
 
-draw_neural_net(weights, biases, tf, attribute_names=attributeNames2)
+draw_neural_net(weights, biases, tf, attribute_names=attributeNamesNoOff2)
 
 # Print the average classification error rate
 print('\nEstimated generalization error, RMSE: {0}'.format(round(np.sqrt(np.mean(errors)), 4)))
