@@ -15,7 +15,7 @@ from toolbox_02450 import windows_graphviz_call
 from matplotlib.image import imread
 from sklearn import metrics
 from sklearn.dummy import DummyClassifier
-from scipy import stats
+
 
 # read the data into python
 df = pd.read_csv("http://www-stat.stanford.edu/~tibs/ElemStatLearn/datasets/SAheart.data",
@@ -55,7 +55,13 @@ Xall[:,M] = y
 
 
 #Make standadized values of Xr (subtract mean and devide by standard deviation)
-Xr_stand = stats.zscore(Xr)
+Y = (Xr - np.ones((N,1))*Xr.mean(axis=0))
+Y = np.array(Y,dtype=float)
+Y = Y*(1/np.std(Y,0))
+
+Yall = (Xall - np.ones((N,1))*Xall.mean(axis=0))
+Yall = np.array(Yall,dtype=float)
+Yall = Yall*(1/np.std(Yall,0))
 
 
 
@@ -77,45 +83,34 @@ lambda_interval = np.logspace(-2, 3, 10)
 
 # Initialize variables
 #T = len(lambdas)
+Error_train = np.empty((K,1))
+Error_test = np.empty((K,1))
+Error_train_rlr = np.empty((K,1))
+Error_test_rlr = np.empty((K,1))
+Error_train_nofeatures = np.empty((K,1))
+Error_test_nofeatures = np.empty((K,1))
+w_rlr = np.empty((M,K))
 mu = np.empty((K, M-1))
 sigma = np.empty((K, M-1))
+w_noreg = np.empty((M,K))
 
 baseline_test_error_rate = np.empty(K)
 
+min_error_folds = np.empty(K)
 opt_lambda_idx_folds = np.empty(K)
-opt_lambda_fold_internal = np.empty(K)
 opt_lambda_fold = np.empty(K)
-all_lr_mdl = []
 
-# train_error_rate_fold = np.empty((K))
-# test_error_rate_fold = np.empty((K))
 train_error_rate_fold = np.empty((len(lambda_interval),K))
 test_error_rate_fold = np.empty((len(lambda_interval),K))
-min_test_errors_lr = np.empty((K))
-
-parameters = {'max_depth':range(2,20)}
-criterion='gini'
-
-decisiontree_test_error_rate = np.empty(K)
-
-lr_mdls = []
-dt_mdls = []
-
 
 c=0
-for train_index, test_index in CV.split(Xr,y):
+for train_index, test_index in CV.split(X,y):
     # extract training and test set for current CV fold
     X_train = Xr[train_index]
     y_train = y[train_index]
     X_test = Xr[test_index]
     y_test = y[test_index]
-    
-    # Standardize the training and set set based on training set mean and std
-    mu = np.mean(X_train, 0)
-    sigma = np.std(X_train, 0)
-
-    X_train = (X_train - mu) / sigma
-    X_test = (X_test - mu) / sigma
+    internal_cross_validation = 10
     
     ## Baseline model here
     baselinemdl = DummyClassifier(strategy='uniform', random_state=1)
@@ -124,85 +119,44 @@ for train_index, test_index in CV.split(Xr,y):
     
     baseline_test_error_rate[c] = np.sum((baselinemdl.predict(X_test)) != y_test) / len(y_test)
     
-    
-    
-    ##Innerfold
-    train_error_rate_internal_lr = np.zeros((len(lambda_interval),K))
-    test_error_rate_internal_lr = np.zeros((len(lambda_interval),K))
-    
-    for (k2, (train_index_internal, test_index_internal)) in enumerate(CV.split(X_train,y_train)):
-        #extract data 
-        X_train_internal = Xr[train_index_internal]
-        y_train_internal = y[train_index_internal]
-        X_test_internal = Xr[test_index_internal]
-        y_test_internal = y[test_index_internal]
-    
-        #Standardize data
-        X_train_internal = stats.zscore(X_train_internal)
-        X_test_internal = stats.zscore(X_test_internal)
-        
-        ##logistic regression
-        # Fit regularized logistic regression model to training data to predict 
-        # the type of wine
-        internal_lr_mdls = []
-        train_error_rate_lamda = np.zeros(len(lambda_interval))
-        test_error_rate_lamda = np.zeros(len(lambda_interval))
-        coefficient_norm = np.zeros(len(lambda_interval))
-        count = 0
-        for k in range(0, len(lambda_interval)):
-            mdl_lr = LogisticRegression(penalty='l2', C=1/lambda_interval[k] )
-            
-            mdl_lr.fit(X_train_internal, y_train_internal)
-            
-            y_train_est_internal = mdl_lr.predict(X_train_internal).T
-            y_test_est_internal = mdl_lr.predict(X_test_internal).T
-            
-            train_error_rate_lamda[count] = np.sum(y_train_est_internal != y_train_internal) / len(y_train_internal)
-            test_error_rate_lamda[count] = np.sum(y_test_est_internal != y_test_internal) / len(y_test_internal)
-            
-            w_est = mdl_lr.coef_[0]
-            coefficient_norm[k] = np.sqrt(np.sum(w_est**2))
-            
-            count += 1
-        
-        
-        train_error_rate_internal_lr[:,k2] = train_error_rate_lamda
-        test_error_rate_internal_lr[:,k2] = test_error_rate_lamda
-        
-        opt_lambda_fold_internal[k2] = lambda_interval[np.argmin(test_error_rate_lamda)]
-    
-    
-    min_index = np.argmin(test_error_rate_internal_lr)
-    opt_lambda_fold[c] = opt_lambda_fold_internal[min_index]
-    
-    mdl_lr = LogisticRegression(penalty='l2', C=1/opt_lambda_fold[c] )
-            
-    mdl_lr.fit(X_train, y_train)
-    all_lr_mdl.append(mdl_lr)
-    
-    y_train_est = mdl_lr.predict(X_train).T
-    y_test_est = mdl_lr.predict(X_test).T
-    
-    min_test_errors_lr[c] = np.sum(y_test_est != y_test) / len(y_test)    
+    # Standardize the training and set set based on training set mean and std
+    mu = np.mean(X_train, 0)
+    sigma = np.std(X_train, 0)
 
+    X_train = (X_train - mu) / sigma
+    X_test = (X_test - mu) / sigma
     
-    ##decisionstree
-    clf = GridSearchCV(tree.DecisionTreeClassifier(criterion=criterion), parameters)
-    clf.fit(X=X_train, y=y_train)
-    tree_model = clf.best_estimator_
-    print (clf.best_score_, clf.best_params_)
+    # Fit regularized logistic regression model to training data to predict 
+    # the type of wine
+    train_error_rate = np.zeros(len(lambda_interval))
+    test_error_rate = np.zeros(len(lambda_interval))
+    coefficient_norm = np.zeros(len(lambda_interval))
+    for k in range(0, len(lambda_interval)):
+        mdl = LogisticRegression(penalty='l2', C=1/lambda_interval[k] )
     
-    y_test_est = tree_model.predict(X_test)
+        mdl.fit(X_train, y_train)
+
+        y_train_est = mdl.predict(X_train).T
+        y_test_est = mdl.predict(X_test).T
     
-    # dtc = dtc.fit(X_train,y_train)
-    # y_test_est = dtc.predict(y_test)
-    decisiontree_test_error_rate[c] = np.sum(y_test_est != y_test) / len(y_test)
+        train_error_rate[k] = np.sum(y_train_est != y_train) / len(y_train)
+        test_error_rate[k] = np.sum(y_test_est != y_test) / len(y_test)
+        
+        w_est = mdl.coef_[0] 
+        coefficient_norm[k] = np.sqrt(np.sum(w_est**2))
+    
+    train_error_rate_fold[:,c] = train_error_rate
+    test_error_rate_fold[:,c] = test_error_rate
+    
+    min_error_folds[c] = np.min(test_error_rate)
+    opt_lambda_idx_folds[c] = np.argmin(test_error_rate)
+    opt_lambda_fold[c] = lambda_interval[int(opt_lambda_idx_folds[c])]
     
     c+=1
     
 
-min_error = np.min(min_test_errors_lr)
-opt_lambda_idx = np.argmin(min_test_errors_lr)
+min_error = np.min(min_error_folds)
+opt_lambda_idx = np.argmin(min_error_folds)
 opt_lambda = opt_lambda_fold[opt_lambda_idx]
 
 plt.figure(figsize=(8,8))
@@ -230,37 +184,42 @@ plt.grid()
 plt.show()
 
 ### Decision tree
-# parameters = {'max_depth':range(2,20)}
+parameters = {'max_depth':range(2,20)}
+clf = GridSearchCV(tree.DecisionTreeClassifier(), parameters)
+clf.fit(X=Xr, y=y)
+tree_model = clf.best_estimator_
+print (clf.best_score_, clf.best_params_)
 
 
-# decisiontree_test_error_rate = np.empty(K)
 
-# c=0
-# for train_index, test_index in CV.split(X,y):
-#     # extract training and test set for current CV fold
-#     X_train = Xr_stand[train_index]
-#     y_train = y[train_index]
-#     X_test = Xr_stand[test_index]
-#     y_test = y[test_index]
+decisiontree_test_error_rate = np.empty(K)
+
+c=0
+for train_index, test_index in CV.split(X,y):
+    # extract training and test set for current CV fold
+    X_train = Xr[train_index]
+    y_train = y[train_index]
+    X_test = Xr[test_index]
+    y_test = y[test_index]
     
-#     #How do we make the innner
-#     criterion='gini'
-#     clf = GridSearchCV(tree.DecisionTreeClassifier(criterion=criterion), parameters)
-#     clf.fit(X=X_train, y=y_train)
-#     tree_model = clf.best_estimator_
-#     print (clf.best_score_, clf.best_params_)
+    #How do we make the innner
+    criterion='gini'
+    clf = GridSearchCV(tree.DecisionTreeClassifier(criterion=criterion), parameters)
+    clf.fit(X=X_train, y=y_train)
+    tree_model = clf.best_estimator_
+    print (clf.best_score_, clf.best_params_)
     
-#     y_test_est = tree_model.predict(X_test)
+    y_test_est = tree_model.predict(X_test)
     
-#     # dtc = dtc.fit(X_train,y_train)
-#     # y_test_est = dtc.predict(y_test)
-#     decisiontree_test_error_rate[c] = np.sum(y_test_est != y_test) / len(y_test)
+    # dtc = dtc.fit(X_train,y_train)
+    # y_test_est = dtc.predict(y_test)
+    decisiontree_test_error_rate[c] = np.sum(y_test_est != y_test) / len(y_test)
     
-#     c = c+1;
+    c = c+1;
     
 
 
-### plot a decision tree
+
 # fname='tree_' + criterion + '_CHD_data'
 # # Export tree graph .gvz file to parse to graphviz
 # out = tree.export_graphviz(dtc, out_file=fname + '.gvz', feature_names=attributeNames[1:10])
@@ -286,4 +245,6 @@ plt.show()
 
 
 
+
+# -*- coding: utf-8 -*-
 

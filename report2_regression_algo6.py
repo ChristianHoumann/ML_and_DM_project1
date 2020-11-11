@@ -15,7 +15,7 @@ import torch
 from sklearn import model_selection
 from toolbox_02450 import train_neural_net, draw_neural_net
 from scipy import stats
-
+import numpy as np, scipy.stats as st
 
 # read the data into python
 df = pd.read_csv("http://www-stat.stanford.edu/~tibs/ElemStatLearn/datasets/SAheart.data",
@@ -53,16 +53,6 @@ Xall[:,0:M] = Xr
 Xall[:,M] = y
 
 
-#Make standadized values of Xr (subtract mean and devide by standard deviation)
-Y = (Xr - np.ones((N,1))*Xr.mean(axis=0))
-Y = np.array(Y,dtype=float)
-Y = Y*(1/np.std(Y,0))
-
-Yall = (Xall - np.ones((N,1))*Xall.mean(axis=0))
-Yall = np.array(Yall,dtype=float)
-Yall = Yall*(1/np.std(Yall,0))
-
-
 ############ Regression ##################
 ###### Part A
 Ysbp = Xall[:,0] #Sbp
@@ -76,14 +66,14 @@ Xdt = stats.zscore(Xdt)
 # Add offset attribute
 Xreg = np.concatenate((np.ones((Xreg.shape[0],1)),Xreg),1)
 attributeNamesNoOff = attributeNames
-attributeNames = [u'Offset']+attributeNames
+attributeNames = [u'Offset']+attributeNames #Why does this add Offset to all atributes?
 M = M+1
 
 
 ## Crossvalidation
 # Create crossvalidation partition for evaluation
 K = 5
-CV = model_selection.KFold(K, shuffle=True)
+CV = model_selection.KFold(K, shuffle=True,random_state=420)
 
 # Values of lambda
 lambdas = np.logspace(-2, 8, 10)
@@ -102,11 +92,46 @@ sigma = np.empty((K, M-1))
 w_noreg = np.empty((M,K))
 all_lamdas = np.empty((K))
 
+Z_lr = []
+Z_base = []
+Z_ANN = []
+
+
 
 yhat_lr = []
 yhat_lr_base = []
 yhat_ANN = []
 y_true = []
+
+
+### part A using algo 5
+opt_val_err, opt_lambda, mean_w_vs_lambda, train_err_vs_lambda, test_err_vs_lambda = rlr_validate(Xreg, Ysbp, lambdas, 10)
+figure(1, figsize=(12,8))
+subplot(1,2,1)
+semilogx(lambdas,mean_w_vs_lambda.T[:,1:],'.-') # Don't plot the bias term
+xlabel('Regularization factor')
+ylabel('Mean Coefficient Values')
+grid()
+# You can choose to display the legend, but it's omitted for a cleaner 
+# plot, since there are many attributes
+#legend(attributeNames[1:], loc='best')
+subplot(1,2,2)
+title('Optimal lambda: 1e{0}'.format(np.log10(opt_lambda)))
+loglog(lambdas,train_err_vs_lambda.T,'b.-',lambdas,test_err_vs_lambda.T,'r.-')
+xlabel('Regularization factor')
+ylabel('Squared error (crossvalidation)')
+legend(['Train error','Validation error'])
+grid()
+
+
+Xty = Xreg.T @ Ysbp
+XtX = Xreg.T @ Xreg
+
+# Estimate weights for the optimal value of lambda, on entire training set
+lambdaI = opt_lambda * np.eye(M)
+lambdaI[0,0] = 0 # Do no regularize the bias term
+md_lr_algo5 = np.linalg.solve(XtX+lambdaI,Xty).squeeze()
+
 
 
 
@@ -148,16 +173,13 @@ for train_index_lr, test_index_lr in CV.split(Xreg,Ysbp):
     Error_train_rlr[k] = np.square(y_train_lr-X_train_lr @ w_rlr[:,k]).sum(axis=0)/y_train_lr.shape[0]
     Error_test_rlr[k] = np.square(y_test_lr-X_test_lr @ w_rlr[:,k]).sum(axis=0)/y_test_lr.shape[0]
     
-    y_est_lr = (X_test_lr @ w_rlr[:,k])
-    
-    dy_lr = []
-    dy_lr.append(y_est_lr)
-    dy_lr = np.concatenate(dy_lr)
-
-    yhat_lr.append(dy_lr)
+    Z_lr.append(np.abs(y_test_lr - (X_test_lr @ w_rlr[:,k]) ) ** 2)
     
     # Estimate weights for unregularized linear regression, on entire training set
     w_noreg[:,k] = np.linalg.solve(XtX,Xty).squeeze()
+    
+    Z_base.append(np.abs(y_test_lr - (X_test_lr @ w_noreg[:,k]) ) ** 2)
+    
     # Compute mean squared error without regularization
     Error_train[k] = np.square(y_train_lr-X_train_lr @ w_noreg[:,k]).sum(axis=0)/y_train_lr.shape[0]
     Error_test[k] = np.square(y_test_lr-X_test_lr @ w_noreg[:,k]).sum(axis=0)/y_test_lr.shape[0]
@@ -210,9 +232,9 @@ print('- R^2 test:     {0}\n'.format((Error_test_nofeatures.sum()-Error_test_rlr
 ### ANN
 Ysbp = Ysbp.reshape(462,1)
 
-n_hidden_units_all = [1,3,4,5,6]
-n_replicates = 1           # number of networks trained in each k-fold
-max_iter = 500
+n_hidden_units_all = [1,3,4,5,6,7,8,9]
+n_replicates = 1          # number of networks trained in each k-fold
+max_iter = 2
 
 
 # K-fold crossvalidation
@@ -243,12 +265,13 @@ for (k, (train_index, test_index)) in enumerate(CV.split(Xdt,Ysbp)):
     y_test = torch.Tensor(Ysbp[test_index])
     
     
-    Internalerrors = np.empty((K,K_internal))
+    Internalerrors = np.empty((len(n_hidden_units_all),K_internal))
     Internalmodel = []
     
-    Egen = np.empty((K_internal))
+    Egen = np.empty((len(n_hidden_units_all)))
     
     ##### internal cross validation #########
+    # NEW CV SPLIT
     for (k2, (train_index_internal, test_index_internal)) in enumerate(CV.split(X_train,y_train)):
         
         X_train_internal = torch.Tensor(Xdt[train_index_internal,:])
@@ -307,6 +330,8 @@ for (k, (train_index, test_index)) in enumerate(CV.split(Xdt,Ysbp)):
     
     y_test_est = net(X_test)
     
+    Z_ANN.append(np.abs(y_test.detach().numpy() - y_test_est.detach().numpy()) ** 2)
+    
     # Determine errors and errors
     se = (y_test_est.float()-y_test.float())**2 # squared error
     mse = (sum(se).type(torch.float)/len(y_test)).data.numpy() #mean
@@ -350,7 +375,7 @@ weights = [net[i].weight.data.numpy().T for i in [0,2]]
 biases = [net[i].bias.data.numpy() for i in [0,2]]
 tf =  [str(net[i]) for i in [1,2]]
 
-attributeNames2 = [name[:] for name in attributeNames[1:10]]
+attributeNames2 = [name[:] for name in attributeNamesNoOff[1:10]]
 
 draw_neural_net(weights, biases, tf, attribute_names=attributeNames2)
 
@@ -377,6 +402,21 @@ plt.grid()
 plt.show()
 
 
+### Make CI and p
+alpha = 0.05
+
+Z_lr_base = Z_lr[np.argmin(Error_test_rlr)] - Z_base[np.argmin(Error_test)]
+CI_lr_base = st.t.interval(1-alpha, len(Z_lr_base)-1, loc=np.mean(Z_lr_base), scale=st.sem(Z_lr_base))  # Confidence interval
+p_lr_base = st.t.cdf( -np.abs( np.mean(Z_lr_base) )/st.sem(Z_lr_base), df=len(Z_lr_base)-1)  # p-value
+
+
+Z_lr_ANN = Z_lr[np.argmin(Error_test_rlr)] - Z_ANN[np.argmin(errors)]
+CI_lr_ANN = st.t.interval(1-alpha, len(Z_lr_ANN)-1, loc=np.mean(Z_lr_ANN), scale=st.sem(Z_lr_ANN))  # Confidence interval
+p_lr_ANN = st.t.cdf( -np.abs( np.mean(Z_lr_ANN) )/st.sem(Z_lr_ANN), df=len(Z_lr_ANN)-1)  # p-value
+
+Z_base_ANN = Z_base[np.argmin(Error_test)] - Z_ANN[np.argmin(errors)]
+CI_base_ANN = st.t.interval(1-alpha, len(Z_base_ANN)-1, loc=np.mean(Z_base_ANN), scale=st.sem(Z_base_ANN))  # Confidence interval
+p_base_ANN = st.t.cdf( -np.abs( np.mean(Z_base_ANN) )/st.sem(Z_base_ANN), df=len(Z_base_ANN)-1)  # p-value
 
 
 
