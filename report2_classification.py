@@ -86,13 +86,16 @@ opt_lambda_idx_folds = np.empty(K)
 opt_lambda_fold_internal = np.empty(K)
 opt_lambda_fold = np.empty(K)
 all_lr_mdl = []
+all_dt_mdl = []
 
 # train_error_rate_fold = np.empty((K))
 # test_error_rate_fold = np.empty((K))
 train_error_rate_fold = np.empty((len(lambda_interval),K))
 test_error_rate_fold = np.empty((len(lambda_interval),K))
 min_test_errors_lr = np.empty((K))
+min_test_errors_dt = np.empty((K))
 
+max_depth_range = range(2,20)
 parameters = {'max_depth':range(2,20)}
 criterion='gini'
 
@@ -125,12 +128,16 @@ for train_index, test_index in CV.split(Xr,y):
     baseline_test_error_rate[c] = np.sum((baselinemdl.predict(X_test)) != y_test) / len(y_test)
     
     Egen_lr = np.empty((len(lambda_interval)))
+    Egen_dt = np.empty((len(max_depth_range)))
     
     Internalmodel_lr = []
+    Internalmodel_dt = []
     
     ##Innerfold
     train_error_rate_internal_lr = np.zeros((len(lambda_interval),K))
     test_error_rate_internal_lr = np.zeros((len(lambda_interval),K))
+    
+    test_error_rate_internal_dt = np.zeros((len(max_depth_range),K))
     
     for (k2, (train_index_internal, test_index_internal)) in enumerate(CV.split(X_train,y_train)):
         #extract data 
@@ -168,11 +175,23 @@ for train_index, test_index in CV.split(Xr,y):
             w_est = mdl_lr.coef_[0]
             coefficient_norm[k] = np.sqrt(np.sum(w_est**2))
             
-            ## DT here
+            count += 1
+        
+        
+        count = 0
+        for k in max_depth_range:
+            dt_mdl = tree.DecisionTreeClassifier(max_depth=k)
             
+            dt_mdl.fit(X=X_train_internal, y=y_train_internal)
+            
+            y_test_est_internal_dt = dt_mdl.predict(X_test_internal)
+            
+            test_error_rate_internal_dt[count][k2] = np.sum(y_test_est_internal_dt != y_test_internal) / len(y_test_internal)
+            
+            Internalmodel_dt.append(dt_mdl)
             
             count += 1
-
+            
     
     count = 0
     for errorsmdl in test_error_rate_internal_lr:
@@ -190,19 +209,22 @@ for train_index, test_index in CV.split(Xr,y):
     y_test_est = mdl_lr.predict(X_test).T
     
     min_test_errors_lr[c] = np.sum(y_test_est != y_test) / len(y_test)    
+    
+    
+    # training outer model and findeing test error for decision tree
+    count = 0
+    for errorsmdl in test_error_rate_internal_dt:
+        Egen_dt[count] = (sum(errorsmdl))*(len(test_index_internal)/len(train_index))
+        count += 1
 
+    mdl_dt = Internalmodel_dt[np.argmin(Egen_dt)]
+     
+    mdl_dt.fit(X_train, y_train)
+    all_dt_mdl.append(mdl_dt)
+
+    y_test_est_dt = mdl_dt.predict(X_test)
     
-    ##decisionstree
-    clf = GridSearchCV(tree.DecisionTreeClassifier(criterion=criterion), parameters)
-    clf.fit(X=X_train, y=y_train)
-    tree_model = clf.best_estimator_
-    print (clf.best_score_, clf.best_params_)
-    
-    y_test_est = tree_model.predict(X_test)
-    
-    # dtc = dtc.fit(X_train,y_train)
-    # y_test_est = dtc.predict(y_test)
-    decisiontree_test_error_rate[c] = np.sum(y_test_est != y_test) / len(y_test)
+    min_test_errors_dt[c] = np.sum(y_test_est_dt != y_test) / len(y_test)
     
     c+=1
     
@@ -210,6 +232,12 @@ for train_index, test_index in CV.split(Xr,y):
 # save min error and best model
 min_error_lr = np.min(min_test_errors_lr)
 best_mdl_lr = all_lr_mdl[np.argmin(min_test_errors_lr)]
+
+min_error_dt = np.min(min_test_errors_dt)
+best_mdl_dt = all_dt_mdl[np.argmin(min_test_errors_dt)]
+
+for mdl_tmp in all_dt_mdl:
+    print("Max depth is: {0}".format(mdl_tmp.get_depth()))
 
 
 # plot for the last internal fold
@@ -240,52 +268,22 @@ plt.grid()
 plt.show()
 
 ### Decision tree
-# parameters = {'max_depth':range(2,20)}
+# plot a decision tree
+fname='tree_' + criterion + '_CHD_data'
+# Export tree graph .gvz file to parse to graphviz
+out = tree.export_graphviz(best_mdl_dt, out_file=fname + '.gvz', feature_names=attributeNames[0:9])
 
-
-# decisiontree_test_error_rate = np.empty(K)
-
-# c=0
-# for train_index, test_index in CV.split(X,y):
-#     # extract training and test set for current CV fold
-#     X_train = Xr_stand[train_index]
-#     y_train = y[train_index]
-#     X_test = Xr_stand[test_index]
-#     y_test = y[test_index]
-    
-#     #How do we make the innner
-#     criterion='gini'
-#     clf = GridSearchCV(tree.DecisionTreeClassifier(criterion=criterion), parameters)
-#     clf.fit(X=X_train, y=y_train)
-#     tree_model = clf.best_estimator_
-#     print (clf.best_score_, clf.best_params_)
-    
-#     y_test_est = tree_model.predict(X_test)
-    
-#     # dtc = dtc.fit(X_train,y_train)
-#     # y_test_est = dtc.predict(y_test)
-#     decisiontree_test_error_rate[c] = np.sum(y_test_est != y_test) / len(y_test)
-    
-#     c = c+1;
-    
-
-
-### plot a decision tree
-# fname='tree_' + criterion + '_CHD_data'
-# # Export tree graph .gvz file to parse to graphviz
-# out = tree.export_graphviz(dtc, out_file=fname + '.gvz', feature_names=attributeNames[1:10])
-
-# if system() == 'Windows':
-#     # N.B.: you have to update the path_to_graphviz to reflect the position you 
-#     # unzipped the software in!
-#     path_to_graphviz = r'C:\Users\thore\.spyder-py3\Graphviz' # CHANGE THIS
-#     windows_graphviz_call(fname=fname,
-#                           cur_dir=getcwd(),
-#                           path_to_graphviz=path_to_graphviz)
-#     plt.figure(figsize=(12,12))
-#     plt.imshow(imread(fname + '.png'))
-#     plt.box('off'); plt.axis('off')
-#     plt.show()
+if system() == 'Windows':
+    # N.B.: you have to update the path_to_graphviz to reflect the position you 
+    # unzipped the software in!
+    path_to_graphviz = r'C:\Users\thore\.spyder-py3\Graphviz' # CHANGE THIS
+    windows_graphviz_call(fname=fname,
+                          cur_dir=getcwd(),
+                          path_to_graphviz=path_to_graphviz)
+    plt.figure(figsize=(12,12))
+    plt.imshow(imread(fname + '.png'))
+    plt.box('off'); plt.axis('off')
+    plt.show()
 
 
 
