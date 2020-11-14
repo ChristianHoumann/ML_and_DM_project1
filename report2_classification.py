@@ -124,7 +124,9 @@ for train_index, test_index in CV.split(Xr,y):
     
     baseline_test_error_rate[c] = np.sum((baselinemdl.predict(X_test)) != y_test) / len(y_test)
     
+    Egen_lr = np.empty((len(lambda_interval)))
     
+    Internalmodel_lr = []
     
     ##Innerfold
     train_error_rate_internal_lr = np.zeros((len(lambda_interval),K))
@@ -145,11 +147,11 @@ for train_index, test_index in CV.split(Xr,y):
         # Fit regularized logistic regression model to training data to predict 
         # the type of wine
         internal_lr_mdls = []
-        train_error_rate_lamda = np.zeros(len(lambda_interval))
-        test_error_rate_lamda = np.zeros(len(lambda_interval))
         coefficient_norm = np.zeros(len(lambda_interval))
         count = 0
         for k in range(0, len(lambda_interval)):
+            
+            ## Logistic regression 
             mdl_lr = LogisticRegression(penalty='l2', C=1/lambda_interval[k] )
             
             mdl_lr.fit(X_train_internal, y_train_internal)
@@ -157,26 +159,30 @@ for train_index, test_index in CV.split(Xr,y):
             y_train_est_internal = mdl_lr.predict(X_train_internal).T
             y_test_est_internal = mdl_lr.predict(X_test_internal).T
             
-            train_error_rate_lamda[count] = np.sum(y_train_est_internal != y_train_internal) / len(y_train_internal)
-            test_error_rate_lamda[count] = np.sum(y_test_est_internal != y_test_internal) / len(y_test_internal)
+            # save test and train error for each lamda
+            train_error_rate_internal_lr[count][k2] = np.sum(y_train_est_internal != y_train_internal) / len(y_train_internal)
+            test_error_rate_internal_lr[count][k2] = np.sum(y_test_est_internal != y_test_internal) / len(y_test_internal)
+            
+            Internalmodel_lr.append(mdl_lr)
             
             w_est = mdl_lr.coef_[0]
             coefficient_norm[k] = np.sqrt(np.sum(w_est**2))
             
-            count += 1
-        
-        
-        train_error_rate_internal_lr[:,k2] = train_error_rate_lamda
-        test_error_rate_internal_lr[:,k2] = test_error_rate_lamda
-        
-        opt_lambda_fold_internal[k2] = lambda_interval[np.argmin(test_error_rate_lamda)]
-    
-    
-    min_index = np.argmin(test_error_rate_internal_lr)
-    opt_lambda_fold[c] = opt_lambda_fold_internal[min_index]
-    
-    mdl_lr = LogisticRegression(penalty='l2', C=1/opt_lambda_fold[c] )
+            ## DT here
             
+            
+            count += 1
+
+    
+    count = 0
+    for errorsmdl in test_error_rate_internal_lr:
+        Egen_lr[count] = (sum(errorsmdl))*(len(test_index_internal)/len(train_index))
+        count += 1
+        
+    minIndex = np.argmin(Egen_lr)
+
+    mdl_lr = Internalmodel_lr[minIndex]
+     
     mdl_lr.fit(X_train, y_train)
     all_lr_mdl.append(mdl_lr)
     
@@ -201,21 +207,25 @@ for train_index, test_index in CV.split(Xr,y):
     c+=1
     
 
-min_error = np.min(min_test_errors_lr)
-opt_lambda_idx = np.argmin(min_test_errors_lr)
-opt_lambda = opt_lambda_fold[opt_lambda_idx]
+# save min error and best model
+min_error_lr = np.min(min_test_errors_lr)
+best_mdl_lr = all_lr_mdl[np.argmin(min_test_errors_lr)]
+
+
+# plot for the last internal fold
+min_error = np.min(test_error_rate_internal_lr[:,3])
+opt_lambda_idx = np.argmin(test_error_rate_internal_lr[:,3])
+opt_lambda = lambda_interval[opt_lambda_idx]
+
 
 plt.figure(figsize=(8,8))
-#plt.plot(np.log10(lambda_interval), train_error_rate*100)
-#plt.plot(np.log10(lambda_interval), test_error_rate*100)
-#plt.plot(np.log10(opt_lambda), min_error*100, 'o')
-plt.semilogx(lambda_interval, train_error_rate_fold[:,opt_lambda_idx]*100)
-plt.semilogx(lambda_interval, test_error_rate_fold[:,opt_lambda_idx]*100)
+plt.semilogx(lambda_interval, train_error_rate_internal_lr[:,3]*100)
+plt.semilogx(lambda_interval, test_error_rate_internal_lr[:,3]*100)
 plt.semilogx(opt_lambda, min_error*100, 'o')
-plt.text(1e-2, 3, "Minimum test error: " + str(np.round(min_error*100,2)) + ' % at 1e' + str(np.round(np.log10(opt_lambda),2)))
+plt.text(1e-2, 3, "Minimum validation error: " + str(np.round(min_error*100,2)) + ' % at 1e' + str(np.round(np.log10(opt_lambda),2)))
 plt.xlabel('Regularization strength, $\log_{10}(\lambda)$')
 plt.ylabel('Error rate (%)')
-plt.title('Classification error')
+plt.title('Classification error for last internal fold')
 plt.legend(['Training error','Test error','Test minimum'],loc='upper right')
 plt.ylim([0, 40])
 plt.grid()

@@ -159,6 +159,8 @@ min_error = np.min(min_error_folds)
 opt_lambda_idx = np.argmin(min_error_folds)
 opt_lambda = opt_lambda_fold[opt_lambda_idx]
 
+test_error_rate_fold[:,opt_lambda_idx]*100
+
 plt.figure(figsize=(8,8))
 #plt.plot(np.log10(lambda_interval), train_error_rate*100)
 #plt.plot(np.log10(lambda_interval), test_error_rate*100)
