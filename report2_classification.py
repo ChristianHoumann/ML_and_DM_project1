@@ -16,6 +16,8 @@ from matplotlib.image import imread
 from sklearn import metrics
 from sklearn.dummy import DummyClassifier
 from scipy import stats
+from toolbox_02450 import mcnemar
+
 
 # read the data into python
 df = pd.read_csv("http://www-stat.stanford.edu/~tibs/ElemStatLearn/datasets/SAheart.data",
@@ -41,69 +43,41 @@ Xr[:,4] = np.array([famHistDict[cl] for cl in famHistLable])
 Xr = Xr.astype(np.float)
 
 attributeNames = np.asarray(df.columns[range(1, 11)])
-## a short version of attributenames:
-attributeNamesShort = [None] * 10
-for i in range(len(attributeNames)):
-    attributeNamesShort[i] = (attributeNames[i])[:3]
-    
 N, M = X.shape
-
-# make array of all atributes
-Xall = np.zeros((N,M+1))
-Xall[:,0:M] = Xr
-Xall[:,M] = y
-
 
 #Make standadized values of Xr (subtract mean and devide by standard deviation)
 Xr_stand = stats.zscore(Xr)
 
 
-
-
 ################ Classification ##################
 
-#X_train, X_test, y_train, y_test = train_test_split(Xr, y, test_size=.95, stratify=y)
-
-# Try to change the test_size to e.g. 50 % and 99 % - how does that change the 
-# effect of regularization? How does differetn runs of  test_size=.99 compare 
-# to eachother?
-
-K = 10
+K = 10 #This is for both inner and outer CV split
 CV = model_selection.KFold(K, shuffle=True)
-#CV = model_selection.KFold(K, shuffle=False)
 
 # Values of lambda
 lambda_interval = np.logspace(-2, 3, 10)
 
+# Values of dt depth
+max_depth_range = range(2,20)
+
 # Initialize variables
-#T = len(lambdas)
 mu = np.empty((K, M-1))
 sigma = np.empty((K, M-1))
 
-baseline_test_error_rate = np.empty(K)
-
-opt_lambda_idx_folds = np.empty(K)
-opt_lambda_fold_internal = np.empty(K)
-opt_lambda_fold = np.empty(K)
 all_lr_mdl = []
 all_dt_mdl = []
+all_baseline_mdl = []
 
-# train_error_rate_fold = np.empty((K))
-# test_error_rate_fold = np.empty((K))
-train_error_rate_fold = np.empty((len(lambda_interval),K))
-test_error_rate_fold = np.empty((len(lambda_interval),K))
 min_test_errors_lr = np.empty((K))
 min_test_errors_dt = np.empty((K))
-
-max_depth_range = range(2,20)
-parameters = {'max_depth':range(2,20)}
-criterion='gini'
-
+baseline_test_error_rate = np.empty(K)
 decisiontree_test_error_rate = np.empty(K)
 
-lr_mdls = []
-dt_mdls = []
-
+# for CI and p values
+yhat_baseline = []
+yhat_lr = []
+yhat_dt = []
+y_true = []
 
 c=0
 for train_index, test_index in CV.split(Xr,y):
@@ -125,15 +99,18 @@ for train_index, test_index in CV.split(Xr,y):
     # fit model
     baselinemdl.fit(X_train, y_train)
     
+    all_baseline_mdl.append(baselinemdl)
     baseline_test_error_rate[c] = np.sum((baselinemdl.predict(X_test)) != y_test) / len(y_test)
     
+    yhat_baseline.append(baselinemdl.predict(X_test))
+    
+    ##Innerfold
     Egen_lr = np.empty((len(lambda_interval)))
     Egen_dt = np.empty((len(max_depth_range)))
     
     Internalmodel_lr = []
     Internalmodel_dt = []
     
-    ##Innerfold
     train_error_rate_internal_lr = np.zeros((len(lambda_interval),K))
     test_error_rate_internal_lr = np.zeros((len(lambda_interval),K))
     
@@ -150,15 +127,11 @@ for train_index, test_index in CV.split(Xr,y):
         X_train_internal = stats.zscore(X_train_internal)
         X_test_internal = stats.zscore(X_test_internal)
         
-        ##logistic regression
-        # Fit regularized logistic regression model to training data to predict 
-        # the type of wine
-        internal_lr_mdls = []
+        ##logistic regression model loop
         coefficient_norm = np.zeros(len(lambda_interval))
         count = 0
         for k in range(0, len(lambda_interval)):
             
-            ## Logistic regression 
             mdl_lr = LogisticRegression(penalty='l2', C=1/lambda_interval[k] )
             
             mdl_lr.fit(X_train_internal, y_train_internal)
@@ -177,7 +150,7 @@ for train_index, test_index in CV.split(Xr,y):
             
             count += 1
         
-        
+        ## decision tree model loop
         count = 0
         for k in max_depth_range:
             dt_mdl = tree.DecisionTreeClassifier(max_depth=k)
@@ -193,6 +166,7 @@ for train_index, test_index in CV.split(Xr,y):
             count += 1
             
     
+    # training outer model and findeing test error for logistic regression
     count = 0
     for errorsmdl in test_error_rate_internal_lr:
         Egen_lr[count] = (sum(errorsmdl))*(len(test_index_internal)/len(train_index))
@@ -207,6 +181,8 @@ for train_index, test_index in CV.split(Xr,y):
     
     y_train_est = mdl_lr.predict(X_train).T
     y_test_est = mdl_lr.predict(X_test).T
+    
+    yhat_lr.append(y_test_est)
     
     min_test_errors_lr[c] = np.sum(y_test_est != y_test) / len(y_test)    
     
@@ -224,27 +200,36 @@ for train_index, test_index in CV.split(Xr,y):
 
     y_test_est_dt = mdl_dt.predict(X_test)
     
+    yhat_dt.append(y_test_est_dt)
+    
     min_test_errors_dt[c] = np.sum(y_test_est_dt != y_test) / len(y_test)
+    
+    y_true.append(y_test)
     
     c+=1
     
 
+yhat_baseline = np.concatenate(yhat_baseline)
+yhat_lr = np.concatenate(yhat_lr)
+yhat_dt = np.concatenate(yhat_dt)
+y_true = np.concatenate(y_true)
+
+
 # save min error and best model
+min_index_lr = np.argmin(min_test_errors_lr)
 min_error_lr = np.min(min_test_errors_lr)
-best_mdl_lr = all_lr_mdl[np.argmin(min_test_errors_lr)]
+best_mdl_lr = all_lr_mdl[min_index_lr]
 
+min_index_dt = np.argmin(min_test_errors_dt)
 min_error_dt = np.min(min_test_errors_dt)
-best_mdl_dt = all_dt_mdl[np.argmin(min_test_errors_dt)]
+best_mdl_dt = all_dt_mdl[min_index_dt]
 
-for mdl_tmp in all_dt_mdl:
-    print("Max depth is: {0}".format(mdl_tmp.get_depth()))
-
+min_index_baseline = np.argmin(baseline_test_error_rate)
 
 # plot for the last internal fold
 min_error = np.min(test_error_rate_internal_lr[:,3])
 opt_lambda_idx = np.argmin(test_error_rate_internal_lr[:,3])
 opt_lambda = lambda_interval[opt_lambda_idx]
-
 
 plt.figure(figsize=(8,8))
 plt.semilogx(lambda_interval, train_error_rate_internal_lr[:,3]*100)
@@ -267,10 +252,8 @@ plt.title('Parameter vector L2 norm')
 plt.grid()
 plt.show()
 
-### Decision tree
-# plot a decision tree
-fname='tree_' + criterion + '_CHD_data'
-# Export tree graph .gvz file to parse to graphviz
+# plot the best decision tree
+fname='tree_' + 'gini' + '_CHD_data'
 out = tree.export_graphviz(best_mdl_dt, out_file=fname + '.gvz', feature_names=attributeNames[0:9])
 
 if system() == 'Windows':
@@ -287,10 +270,40 @@ if system() == 'Windows':
 
 
 
+### print important results
 
+print("------------ Logistic regression ------------")
+count = 0
+for mdl_tmp in all_lr_mdl:
+    print("lamda choosen is: {0} with test error: {1}".format('{0:.5f}'.format(mdl_tmp.C*10),min_test_errors_lr[count]))
+    count += 1
 
+print("------------ Decision tree ------------")
+count = 0
+for mdl_tmp in all_dt_mdl:
+    print("Max depth is: {0} with test error: {1}".format(mdl_tmp.get_depth(),min_test_errors_dt[count]))
+    count += 1
 
+print("------------ Baseline model------------")
+count = 0
+for mdl_tmp in all_baseline_mdl:
+    print("Baseline with test error: {0}".format(baseline_test_error_rate[count]))
+    count += 1
 
+## CI and p-value using mcnemar test
+alpha = 0.05
+
+## lr and baseline
+[thetahat_lr_base, CI_lr_base, p_lr_base] = mcnemar(y_true, yhat_lr, yhat_baseline, alpha=alpha)
+print("theta = theta_lr-theta_baseline point estimate", thetahat_lr_base, " CI: ", CI_lr_base, "p-value", p_lr_base)
+
+## lr and dt
+[thetahat_lr_dt, CI_lr_dt, p_lr_dt] = mcnemar(y_true, yhat_lr, yhat_dt, alpha=alpha)
+print("theta = theta_lr-theta_dt point estimate", thetahat_lr_dt, " CI: ", CI_lr_dt, "p-value", p_lr_dt)
+
+## dt and baseline
+[thetahat_dt_base, CI_dt_base, p_dt_base] = mcnemar(y_true, yhat_dt, yhat_baseline, alpha=alpha)
+print("theta = theta_dt-theta_baseline point estimate", thetahat_dt_base, " CI: ", CI_dt_base, "p-value", p_dt_base)
 
 
 
