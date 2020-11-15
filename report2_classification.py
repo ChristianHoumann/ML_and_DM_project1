@@ -264,8 +264,14 @@ if system() == 'Windows':
     plt.show()
 
 
-
 ### print important results
+print("A logistic regression model with lamda value {0} and coefs:".format(best_mdl_lr.C))
+count = 0
+attributeNames[0:9]
+for name in attributeNames[0:9]:
+    print("Attribute {0} with weight {1}".format(name,(best_mdl_lr.coef_)[0][count]))
+    count += 1
+
 
 print("------------ Logistic regression ------------")
 count = 0

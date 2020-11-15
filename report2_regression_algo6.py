@@ -1,21 +1,17 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from scipy.linalg import svd
 from matplotlib.pyplot import (figure, plot, title, xlabel, ylabel, show,
                                legend, subplot, xticks, yticks, boxplot, hist,
                                ylim)
 from matplotlib.pylab import (figure, semilogx, loglog, xlabel, ylabel, legend, 
                            title, subplot, show, grid)
-from scipy.io import loadmat
-import sklearn.linear_model as lm
 from sklearn import model_selection
 from toolbox_02450 import rlr_validate
 import torch
-from sklearn import model_selection
 from toolbox_02450 import train_neural_net, draw_neural_net
 from scipy import stats
-import numpy as np, scipy.stats as st
+import scipy.stats as st
 
 # read the data into python
 df = pd.read_csv("http://www-stat.stanford.edu/~tibs/ElemStatLearn/datasets/SAheart.data",
@@ -73,7 +69,7 @@ M = M+1
 ## Crossvalidation
 # Create crossvalidation partition for evaluation
 K = 5
-CV = model_selection.KFold(K, shuffle=True,random_state=420)
+CV = model_selection.KFold(K, shuffle=True,random_state=42069)
 
 # Values of lambda
 lambdas = np.array([0.01,0.50,1.00,15.00,20.00,50.00,100.00,140.00,150.00,160.00,200.00,300.00,400.00,500.00])
@@ -95,8 +91,7 @@ all_lamdas = np.empty((K))
 
 Z_lr = []
 Z_base = []
-Z_ANN = []
-
+zann = []
 
 
 yhat_lr = []
@@ -107,7 +102,7 @@ y_true = []
 
 ### part A using algo 5
 opt_val_err, opt_lambda, mean_w_vs_lambda, train_err_vs_lambda, test_err_vs_lambda = rlr_validate(Xreg, Ysbp, lambdas, 10)
-figure(1, figsize=(12,8))
+figure(1, figsize=(17,8))
 subplot(1,2,1)
 semilogx(lambdas,mean_w_vs_lambda.T[:,1:],'.-') # Don't plot the bias term
 xlabel('Regularization factor')
@@ -117,11 +112,11 @@ grid()
 # plot, since there are many attributes
 #legend(attributeNames[1:], loc='best')
 subplot(1,2,2)
-title('Optimal lambda: 1e{0}'.format(np.log10(opt_lambda)))
+title('Optimal lambda: {0}'.format((opt_lambda)))
 loglog(lambdas,train_err_vs_lambda.T,'b.-',lambdas,test_err_vs_lambda.T,'r.-')
 xlabel('Regularization factor')
 ylabel('Squared error (crossvalidation)')
-legend(['Train error','Validation error'])
+legend(['Train error','test error'])
 grid()
 
 
@@ -191,7 +186,7 @@ for train_index_lr, test_index_lr in CV.split(Xreg,Ysbp):
 
     # Display the results for the last cross-validation fold
     if k == K-1:
-        figure(k, figsize=(12,8))
+        figure(k, figsize=(17,8))
         subplot(1,2,1)
         semilogx(lambdas,mean_w_vs_lambda.T[:,1:],'.-') # Don't plot the bias term
         xlabel('Regularization factor')
@@ -202,7 +197,7 @@ for train_index_lr, test_index_lr in CV.split(Xreg,Ysbp):
         #legend(attributeNames[1:], loc='best')
         
         subplot(1,2,2)
-        title('Optimal lambda: 1e{0}'.format(np.log10(opt_lambda)))
+        title('Optimal lambda: {0}'.format((opt_lambda)))
         loglog(lambdas,train_err_vs_lambda.T,'b.-',lambdas,test_err_vs_lambda.T,'r.-')
         xlabel('Regularization factor')
         ylabel('Squared error (crossvalidation)')
@@ -331,7 +326,7 @@ for (k, (train_index, test_index)) in enumerate(CV.split(Xdt,Ysbp)):
     
     y_test_est = net(X_test)
     
-    Z_ANN.append(np.abs(y_test.detach().numpy() - y_test_est.detach().numpy()) ** 2)
+    zann.append(np.abs(y_test.detach().numpy() - y_test_est.detach().numpy()) ** 2)
     
     # Determine errors and errors
     se = (y_test_est.float()-y_test.float())**2 # squared error
@@ -411,14 +406,13 @@ Z_lr_base = np.concatenate(Z_lr) - np.concatenate(Z_base)
 CI_lr_base = st.t.interval(1-alpha, len(Z_lr_base)-1, loc=np.mean(Z_lr_base), scale=st.sem(Z_lr_base))  # Confidence interval
 p_lr_base = st.t.cdf( -np.abs( np.mean(Z_lr_base) )/st.sem(Z_lr_base), df=len(Z_lr_base)-1)  # p-value
 
-
 #Z_lr_ANN = Z_lr[np.argmin(Error_test_rlr)] - Z_ANN[np.argmin(errors)]
-Z_lr_ANN = np.concatenate(Z_lr) - np.concatenate(Z_ANN)
+Z_lr_ANN = np.concatenate(Z_lr) - np.concatenate(zann).reshape(462,)
 CI_lr_ANN = st.t.interval(1-alpha, len(Z_lr_ANN)-1, loc=np.mean(Z_lr_ANN), scale=st.sem(Z_lr_ANN))  # Confidence interval
 p_lr_ANN = st.t.cdf( -np.abs( np.mean(Z_lr_ANN) )/st.sem(Z_lr_ANN), df=len(Z_lr_ANN)-1)  # p-value
 
 #Z_base_ANN = Z_base[np.argmin(Error_test)] - Z_ANN[np.argmin(errors)]
-Z_base_ANN = np.concatenate(Z_base) - np.concatenate(Z_ANN)
+Z_base_ANN = np.concatenate(Z_base) - np.concatenate(zann).reshape(462,)
 CI_base_ANN = st.t.interval(1-alpha, len(Z_base_ANN)-1, loc=np.mean(Z_base_ANN), scale=st.sem(Z_base_ANN))  # Confidence interval
 p_base_ANN = st.t.cdf( -np.abs( np.mean(Z_base_ANN) )/st.sem(Z_base_ANN), df=len(Z_base_ANN)-1)  # p-value
 
