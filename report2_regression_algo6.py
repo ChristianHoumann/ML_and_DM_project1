@@ -230,7 +230,7 @@ Ysbp = Ysbp.reshape(462,1)
 
 n_hidden_units_all = [1,3,5,7,9,11,13,15,17]
 n_replicates = 1          # number of networks trained in each k-fold
-max_iter = 5
+max_iter = 50000
 
 
 # K-fold crossvalidation
@@ -246,6 +246,7 @@ loss_fn = torch.nn.MSELoss() # notice how this is now a mean-squared-error loss
 # Define the model
 allmodels = []
 numberOfHiddenUnits = []
+numberOfHiddenUnits2 = []
 
 CV = model_selection.KFold(K, shuffle=True)
 
@@ -262,7 +263,6 @@ for (k, (train_index, test_index)) in enumerate(CV.split(Xdt,Ysbp)):
     
     
     Internalerrors = np.empty((len(n_hidden_units_all),K_internal))
-    Internalmodel = []
     
     Egen = np.empty((len(n_hidden_units_all)))
     
@@ -275,6 +275,7 @@ for (k, (train_index, test_index)) in enumerate(CV.split(Xdt,Ysbp)):
         X_test_internal = torch.Tensor(Xdt[test_index_internal,:])
         y_test_internal = torch.Tensor(Ysbp[test_index_internal])
         
+        Internalmodel = []
         count = 0
         for h in n_hidden_units_all: 
             model = lambda: torch.nn.Sequential(
@@ -314,6 +315,16 @@ for (k, (train_index, test_index)) in enumerate(CV.split(Xdt,Ysbp)):
         count += 1
         
     minIndex = np.argmin(Egen)
+    
+    hidden_units_from_innerfold = n_hidden_units_all[minIndex]
+    
+    model = lambda: torch.nn.Sequential(
+                        torch.nn.Linear(M-1, hidden_units_from_innerfold), #M features to n_hidden_units
+                        torch.nn.Tanh(),   # 1st transfer function,
+                        torch.nn.Linear(hidden_units_from_innerfold, 1), # n_hidden_units to 1 output neuron
+                        # no final tranfer function, i.e. "linear output"
+                        )
+    
     allmodels.append(Internalmodel[minIndex])
     
     net, final_loss, learning_curve = train_neural_net(allmodels[k],
@@ -338,7 +349,7 @@ for (k, (train_index, test_index)) in enumerate(CV.split(Xdt,Ysbp)):
     for param in (net).parameters():
         paramforCurrent.append(list(param.size()))
 
-
+    numberOfHiddenUnits.append(hidden_units_from_innerfold)
     numberOfHiddenUnits.append(paramforCurrent[0][0])
     
     
@@ -389,7 +400,7 @@ axis_range = [np.min([y_est, y_true])-1,np.max([y_est, y_true])+1]
 plt.plot(axis_range,axis_range,'k--')
 plt.plot(y_true, y_est,'ob',alpha=.25)
 plt.legend(['Perfect estimation','Model estimations'])
-plt.title('Alcohol content: estimated versus true value (for last CV-fold)')
+plt.title('SBP: estimated versus true value (for last CV-fold)')
 plt.ylim(axis_range); plt.xlim(axis_range)
 plt.xlabel('True value')
 plt.ylabel('Estimated value')
