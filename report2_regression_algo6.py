@@ -76,7 +76,8 @@ K = 5
 CV = model_selection.KFold(K, shuffle=True,random_state=420)
 
 # Values of lambda
-lambdas = np.logspace(-2, 8, 10)
+lambdas = np.array([0.01,0.50,1.00,15.00,20.00,50.00,100.00,140.00,150.00,160.00,200.00,300.00,400.00,500.00])
+#lambdas = np.logspace(-2, 8, 10)
 
 # Initialize variables
 #T = len(lambdas)
@@ -232,9 +233,9 @@ print('- R^2 test:     {0}\n'.format((Error_test_nofeatures.sum()-Error_test_rlr
 ### ANN
 Ysbp = Ysbp.reshape(462,1)
 
-n_hidden_units_all = [1,3,4,5,6,7,8,9]
+n_hidden_units_all = [1,3,5,7,9,11,13,15,17]
 n_replicates = 1          # number of networks trained in each k-fold
-max_iter = 2
+max_iter = 5
 
 
 # K-fold crossvalidation
@@ -405,16 +406,19 @@ plt.show()
 ### Make CI and p
 alpha = 0.05
 
-Z_lr_base = Z_lr[np.argmin(Error_test_rlr)] - Z_base[np.argmin(Error_test)]
+#Z_lr_base = Z_lr[np.argmin(Error_test_rlr)] - Z_base[np.argmin(Error_test)]
+Z_lr_base = np.concatenate(Z_lr) - np.concatenate(Z_base)
 CI_lr_base = st.t.interval(1-alpha, len(Z_lr_base)-1, loc=np.mean(Z_lr_base), scale=st.sem(Z_lr_base))  # Confidence interval
 p_lr_base = st.t.cdf( -np.abs( np.mean(Z_lr_base) )/st.sem(Z_lr_base), df=len(Z_lr_base)-1)  # p-value
 
 
-Z_lr_ANN = Z_lr[np.argmin(Error_test_rlr)] - Z_ANN[np.argmin(errors)]
+#Z_lr_ANN = Z_lr[np.argmin(Error_test_rlr)] - Z_ANN[np.argmin(errors)]
+Z_lr_ANN = np.concatenate(Z_lr) - np.concatenate(Z_ANN)
 CI_lr_ANN = st.t.interval(1-alpha, len(Z_lr_ANN)-1, loc=np.mean(Z_lr_ANN), scale=st.sem(Z_lr_ANN))  # Confidence interval
 p_lr_ANN = st.t.cdf( -np.abs( np.mean(Z_lr_ANN) )/st.sem(Z_lr_ANN), df=len(Z_lr_ANN)-1)  # p-value
 
-Z_base_ANN = Z_base[np.argmin(Error_test)] - Z_ANN[np.argmin(errors)]
+#Z_base_ANN = Z_base[np.argmin(Error_test)] - Z_ANN[np.argmin(errors)]
+Z_base_ANN = np.concatenate(Z_base) - np.concatenate(Z_ANN)
 CI_base_ANN = st.t.interval(1-alpha, len(Z_base_ANN)-1, loc=np.mean(Z_base_ANN), scale=st.sem(Z_base_ANN))  # Confidence interval
 p_base_ANN = st.t.cdf( -np.abs( np.mean(Z_base_ANN) )/st.sem(Z_base_ANN), df=len(Z_base_ANN)-1)  # p-value
 

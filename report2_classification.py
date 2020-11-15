@@ -1,19 +1,13 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy.io import loadmat
-from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
-from toolbox_02450 import rocplot, confmatplot
 from sklearn import model_selection
-from toolbox_02450 import rlr_validate
 from sklearn import tree
-from sklearn.model_selection import GridSearchCV
 from platform import system
 from os import getcwd
 from toolbox_02450 import windows_graphviz_call
 from matplotlib.image import imread
-from sklearn import metrics
 from sklearn.dummy import DummyClassifier
 from scipy import stats
 from toolbox_02450 import mcnemar
@@ -55,7 +49,8 @@ K = 10 #This is for both inner and outer CV split
 CV = model_selection.KFold(K, shuffle=True)
 
 # Values of lambda
-lambda_interval = np.logspace(-2, 3, 10)
+lambda_interval = np.array([0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,0.09,0.10,0.15,0.20])
+#lambda_interval = np.logspace(-2, 3, 10)
 
 # Values of dt depth
 max_depth_range = range(2,20)
@@ -132,7 +127,7 @@ for train_index, test_index in CV.split(Xr,y):
         count = 0
         for k in range(0, len(lambda_interval)):
             
-            mdl_lr = LogisticRegression(penalty='l2', C=1/lambda_interval[k] )
+            mdl_lr = LogisticRegression(penalty='l2', C=lambda_interval[k] )
             
             mdl_lr.fit(X_train_internal, y_train_internal)
             
@@ -275,7 +270,7 @@ if system() == 'Windows':
 print("------------ Logistic regression ------------")
 count = 0
 for mdl_tmp in all_lr_mdl:
-    print("lamda choosen is: {0} with test error: {1}".format('{0:.5f}'.format(mdl_tmp.C*10),min_test_errors_lr[count]))
+    print("lamda choosen is: {0} with test error: {1}".format('{0:.3f}'.format(mdl_tmp.C),min_test_errors_lr[count]))
     count += 1
 
 print("------------ Decision tree ------------")
