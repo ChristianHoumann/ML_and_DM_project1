@@ -97,7 +97,6 @@ zann = []
 yhat_lr = []
 yhat_lr_base = []
 yhat_ANN = []
-y_true = []
 
 
 ### part A using algo 5
@@ -228,7 +227,7 @@ print('- R^2 test:     {0}\n'.format((Error_test_nofeatures.sum()-Error_test_rlr
 ### ANN
 Ysbp = Ysbp.reshape(462,1)
 
-n_hidden_units_all = [1,3,5,7,9,11,13,15,17]
+n_hidden_units_all = [1,2,3,4,5,7,9,12,16]
 n_replicates = 1          # number of networks trained in each k-fold
 max_iter = 50000
 
@@ -246,7 +245,6 @@ loss_fn = torch.nn.MSELoss() # notice how this is now a mean-squared-error loss
 # Define the model
 allmodels = []
 numberOfHiddenUnits = []
-numberOfHiddenUnits2 = []
 
 CV = model_selection.KFold(K, shuffle=True)
 
@@ -267,7 +265,7 @@ for (k, (train_index, test_index)) in enumerate(CV.split(Xdt,Ysbp)):
     Egen = np.empty((len(n_hidden_units_all)))
     
     ##### internal cross validation #########
-    # NEW CV SPLIT
+    # Should this be a new CV fold?
     for (k2, (train_index_internal, test_index_internal)) in enumerate(CV.split(X_train,y_train)):
         
         X_train_internal = torch.Tensor(Xdt[train_index_internal,:])
@@ -300,7 +298,7 @@ for (k, (train_index, test_index)) in enumerate(CV.split(Xdt,Ysbp)):
             # Determine estimated class labels for test set
             y_test_est_internal = net(X_test_internal)
         
-            # Determine errors and errors
+            # Determine mean squared errors
             se = (y_test_est_internal.float()-y_test_internal.float())**2 # squared error
             mse = (sum(se).type(torch.float)/len(y_test_internal)).data.numpy() #mean
         
@@ -327,7 +325,7 @@ for (k, (train_index, test_index)) in enumerate(CV.split(Xdt,Ysbp)):
     
     allmodels.append(Internalmodel[minIndex])
     
-    net, final_loss, learning_curve = train_neural_net(allmodels[k],
+    net_outer, final_loss, learning_curve = train_neural_net(model,
                                                        loss_fn,
                                                        X=X_train,
                                                        y=y_train,
@@ -335,7 +333,7 @@ for (k, (train_index, test_index)) in enumerate(CV.split(Xdt,Ysbp)):
                                                        max_iter=max_iter)
     
     
-    y_test_est = net(X_test)
+    y_test_est = net_outer(X_test)
     
     zann.append(np.abs(y_test.detach().numpy() - y_test_est.detach().numpy()) ** 2)
     
@@ -344,13 +342,8 @@ for (k, (train_index, test_index)) in enumerate(CV.split(Xdt,Ysbp)):
     mse = (sum(se).type(torch.float)/len(y_test)).data.numpy() #mean
     
     errors.append((mse)) # store error rate for current CV fold     
-    paramforCurrent = []       
-    
-    for param in (net).parameters():
-        paramforCurrent.append(list(param.size()))
 
     numberOfHiddenUnits.append(hidden_units_from_innerfold)
-    numberOfHiddenUnits.append(paramforCurrent[0][0])
     
     
     # Display the learning curve for the best net in the current fold
@@ -361,15 +354,6 @@ for (k, (train_index, test_index)) in enumerate(CV.split(Xdt,Ysbp)):
     summaries_axes[0].set_ylabel('Loss')
     summaries_axes[0].set_title('Learning curves')
 
-# numberOfHiddenUnits = []
-
-# for ass in allmodels:
-#     for param in (ass.parameters()):
-#         ((list(param.size())))
-    
-#     numberOfHiddenUnits.append(paramforCurrent[0][0])
-
-
 # Display the MSE across folds
 summaries_axes[1].bar(np.arange(1, K+1), np.squeeze(np.asarray(errors)), color=color_list)
 summaries_axes[1].set_xlabel('Fold')
@@ -378,9 +362,9 @@ summaries_axes[1].set_ylabel('MSE')
 summaries_axes[1].set_title('Test mean-squared-error')
     
 print('Diagram of best neural net in last fold:')
-weights = [net[i].weight.data.numpy().T for i in [0,2]]
-biases = [net[i].bias.data.numpy() for i in [0,2]]
-tf =  [str(net[i]) for i in [1,2]]
+weights = [net_outer[i].weight.data.numpy().T for i in [0,2]]
+biases = [net_outer[i].bias.data.numpy() for i in [0,2]]
+tf =  [str(net_outer[i]) for i in [1,2]]
 
 attributeNames2 = [name[:] for name in attributeNamesNoOff[1:10]]
 

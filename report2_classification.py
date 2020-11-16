@@ -82,23 +82,6 @@ for train_index, test_index in CV.split(Xr,y):
     X_test = Xr[test_index]
     y_test = y[test_index]
     
-    # Standardize the training and set set based on training set mean and std
-    mu = np.mean(X_train, 0)
-    sigma = np.std(X_train, 0)
-
-    X_train = (X_train - mu) / sigma
-    X_test = (X_test - mu) / sigma
-    
-    ## Baseline model here
-    baselinemdl = DummyClassifier(strategy='uniform', random_state=1)
-    # fit model
-    baselinemdl.fit(X_train, y_train)
-    
-    all_baseline_mdl.append(baselinemdl)
-    baseline_test_error_rate[c] = np.sum((baselinemdl.predict(X_test)) != y_test) / len(y_test)
-    
-    yhat_baseline.append(baselinemdl.predict(X_test))
-    
     ##Innerfold
     Egen_lr = np.empty((len(lambda_interval)))
     Egen_dt = np.empty((len(max_depth_range)))
@@ -113,10 +96,10 @@ for train_index, test_index in CV.split(Xr,y):
     
     for (k2, (train_index_internal, test_index_internal)) in enumerate(CV.split(X_train,y_train)):
         #extract data 
-        X_train_internal = Xr[train_index_internal]
-        y_train_internal = y[train_index_internal]
-        X_test_internal = Xr[test_index_internal]
-        y_test_internal = y[test_index_internal]
+        X_train_internal = X_train[train_index_internal]
+        y_train_internal = y_train[train_index_internal]
+        X_test_internal = X_train[test_index_internal]
+        y_test_internal = y_train[test_index_internal]
     
         #Standardize data
         X_train_internal = stats.zscore(X_train_internal)
@@ -160,6 +143,24 @@ for train_index, test_index in CV.split(Xr,y):
             
             count += 1
             
+            
+    # Standardize the training and set set based on training set mean and std
+    mu = np.mean(X_train, 0)
+    sigma = np.std(X_train, 0)
+
+    X_train = (X_train - mu) / sigma
+    X_test = (X_test - mu) / sigma
+    
+    ## Baseline model here
+    baselinemdl = DummyClassifier(strategy='uniform', random_state=1)
+    # fit model
+    baselinemdl.fit(X_train, y_train)
+    
+    all_baseline_mdl.append(baselinemdl)
+    baseline_test_error_rate[c] = np.sum((baselinemdl.predict(X_test)) != y_test) / len(y_test)
+    
+    yhat_baseline.append(baselinemdl.predict(X_test))
+    
     
     # training outer model and findeing test error for logistic regression
     count = 0
@@ -262,6 +263,8 @@ if system() == 'Windows':
     plt.imshow(imread(fname + '.png'))
     plt.box('off'); plt.axis('off')
     plt.show()
+    
+    
 
 
 ### print important results
